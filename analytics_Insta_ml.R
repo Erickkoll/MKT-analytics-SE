@@ -11,6 +11,8 @@ library(lattice)
 library(lubridate)
 library(Amelia)
 library(ggplot2)
+library(cluster)
+library(ggplot2)
 
 #carregando dados
 
@@ -69,6 +71,35 @@ plot.cors <- function(x, labs){
 
 # Mapa de Correlação
 plot.cors(cors, "pearson")
+
+dados_cluster <- dados[,c(3,5)]
+View(dados_cluster)
+
+cluster <- kmeans(dados_cluster, centers = 2, iter.max = 100, nstart = 1,
+                      algorithm = c("Hartigan-Wong", "Lloyd", "Forgy",
+                                    "MacQueen"), trace=FALSE)
+
+# Adicionar a coluna de clusters ao conjunto de dados original
+dados$Cluster <- cluster$cluster
+
+# Criar uma tabela de contagem de observações em cada cluster
+tabela_clusters <- table(dados$Cluster)
+V_C <- data.frame(dados$Cluster)
+print(tabela_clusters)
+
+dados_cluster$Alcance_ajustado <- (dados_cluster$Alcance + 2000)
+dados_cluster$Curtidas_ajustadas <- (dados_cluster$Curtidas + 200)
+
+
+# Plot dos agrupamentos
+clusplot(dados_cluster, cluster$cluster, color = TRUE, shade = TRUE, labels = 0, lines = 0,
+         main = "Gráfico de Agrupamentos",
+         xlab = "Alcance",
+         ylab = "Curtidas")
+
+
+axis(side = 1, at = seq(0, 2000, by = 500))
+axis(side = 2, at = seq(0, 200, by = 50))
 
 
 
