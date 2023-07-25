@@ -1,6 +1,6 @@
 #Projeto de análise do Instagram do Startup Experience (SE) com agrupamento por clusterização
 
-setwd("C:/Users/erick/OneDrive/Área de Trabalho/Programação/Startup-project/MKT-analytics-SE")
+setwd("C:/Users/erick/OneDrive/Área de Trabalho/Programação/Startup-project/MKT-analytics-SE/MKT-analytics-SE")
 getwd()
 
 #pacotes
@@ -62,45 +62,110 @@ cors <- cor(dados[, cols], method = "pearson")
 
 head(cors)
 
-# Preprando o plot
-require(lattice)
-plot.cors <- function(x, labs){
-  plot( levelplot(x, 
-                  main = paste("Plot de Correlação usando Método", labs),
-                  scales = list(x = list(rot = 90), cex = 1.0)) )
-}
-
 # Mapa de Correlação
 plot.cors(cors, "pearson")
 
-dados_cluster <- dados[,c(3,5)]
-View(dados_cluster)
 
-cluster <- kmeans(dados_cluster, centers = 2, iter.max = 100, nstart = 1,
-                  algorithm = c("Hartigan-Wong", "Lloyd", "Forgy",
-                                "MacQueen"), trace=FALSE)
+max_iterations <- 500
+iteration <- 1
+condition_met <- FALSE
 
-# Adicionar a coluna de clusters ao conjunto de dados original
-dados$Cluster <- cluster$cluster
+while(iteration <= max_iterations && !condition_met) {
+  
+  # Kmeans clusterização
+  cluster <- kmeans(dados_cluster, centers = 3, iter.max = 100, nstart = 1)
+  dados$Cluster <- cluster$cluster
+  
+  # Renomeando os clusters
+  dados_agrup <- dados
+  dados_agrup[, "Cluster"] <- ifelse(dados_agrup[, "Cluster"] == 1, "padrão",
+                                     ifelse(dados_agrup[, "Cluster"] == 2, "good",
+                                            ifelse(dados_agrup[, "Cluster"] == 3, "hype",
+                                                   as.character(dados_agrup[, "Cluster"]))))
+  
+  # Verificando as condições
+  min_good_alcance <- min(dados_agrup$Alcance[dados_agrup$Cluster == "good"])
+  max_padrao_alcance <- max(dados_agrup$Alcance[dados_agrup$Cluster == "padrão"])
+  
+  min_hype_alcance <- min(dados_agrup$Alcance[dados_agrup$Cluster == "hype"])
+  max_good_alcance <- max(dados_agrup$Alcance[dados_agrup$Cluster == "good"])
+  
+  # Obtendo o percentil 90 de alcance
+  quantile_limit <- quantile(dados_agrup$Alcance, 0.9)
+  
+  if(min_good_alcance > max_padrao_alcance && 
+     min_hype_alcance > max_good_alcance &&
+     min_hype_alcance > quantile_limit) {
+    condition_met <- TRUE
+  } else {
+    iteration <- iteration + 1
+  }
+  
+}
 
-# Criar uma tabela de contagem de observações em cada cluster
-tabela_clusters <- table(dados$Cluster)
-V_C <- data.frame(dados$Cluster)
-View(V_C)
-print(tabela_clusters)
+if(!condition_met) {
+  cat("Condição não satisfeita após", max_iterations, "iterações.\n")
+} else {
+  cat("Condição satisfeita após", iteration, "iterações.\n")
+}
 
+# Função para calcular as envoltórias convexas
+compute_hull <- function(df) {
+  hull_indices <- chull(df$Alcance, df$Curtidas)
+  return(df[hull_indices, ])
+}
 
-plot <- clusplot(dados_cluster, cluster$cluster, color = TRUE, shade = TRUE, labels = 0, lines = 0,
-                 main = "Gráfico de Agrupamentos",
-                 xlab = "Alcance",
-                 ylab = "Curtidas")
+# Definir a ordem dos níveis no fator "Cluster" em dados_agrup
+dados_agrup$Cluster <- factor(dados_agrup$Cluster, levels = c("padrão", "good", "hype"))
 
-dados_agrup <- cbind(dados,V_C)
+# Definir pontos acima do 90º percentil de alcance como 'hype'
+quantile_limit <- quantile(dados_agrup$Alcance, 0.95)
+dados_agrup$Cluster[dados_agrup$Alcance > quantile_limit] <- "hype"
 
-View(dados_agrup)
+# Calcular as envoltórias convexas
+hull_list <- lapply(split(dados_agrup, dados_agrup$Cluster), compute_hull)
+hulls <- do.call(rbind, hull_list)
 
-dados_agrup[, "dados.Cluster"] <- ifelse(dados_agrup[, "dados.Cluster"] == 1, "padrão", 
-                                         ifelse(dados_agrup[, "dados.Cluster"] == 2, "hype",
-                                                as.character(dados_agrup[, "dados.Cluster"])))
+# Plotar os pontos e as delimitações
+ggplot(dados_agrup, aes(x = Alcance, y = Curtidas)) +
+  geom_point(aes(color = as.factor(Cluster))) +
+  geom_polygon(data = hulls, aes(x = Alcance, y = Curtidas, fill = as.factor(Cluster)), alpha = 0.3) +
+  scale_x_continuous(limits = c(0, 2000), breaks = seq(0, 2000, by = 400), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, by = 20), expand = c(0, 0)) +
+  labs(title = "Alcance vs. Curtidas")
 
+# 1. Verificar quantos pontos foram atribuídos ao cluster "hype"
+cat("Número de pontos no cluster 'hype':", sum(dados_agrup$Cluster == "hype"), "\n")
+
+# 2. Ajustar os limites do gráfico, se necessário.
+# Vamos calcular os valores máximos de Alcance e Curtidas para determinar os limites do gráfico
+max_alcance <- max(dados_agrup$Alcance)
+max_curtidas <- max(dados_agrup$Curtidas)
+
+# 3. Desenhar os pontos do cluster "hype"
+# Ajustar a função compute_hull para retornar os pontos mesmo que não possam ser encapsulados por uma envoltória convexa
+compute_hull_adjusted <- function(df) {
+  if (nrow(df) >= 3) {
+    hull_indices <- chull(df$Alcance, df$Curtidas)
+    return(df[hull_indices, ])
+  } else {
+    return(df)  # Retorna os pontos mesmo que não possam ser encapsulados por uma envoltória convexa
+  }
+}
+
+# Recalcular as envoltórias convexas
+hull_list <- lapply(split(dados_agrup, dados_agrup$Cluster), compute_hull_adjusted)
+hulls <- do.call(rbind, hull_list)
+
+# Plotar os pontos e as delimitações com limites ajustados
+ggplot(dados_agrup, aes(x = Alcance, y = Curtidas)) +
+  geom_point(aes(color = as.factor(Cluster))) +
+  geom_polygon(data = hulls, aes(x = Alcance, y = Curtidas, fill = as.factor(Cluster)), alpha = 0.3) +
+  scale_x_continuous(limits = c(0, max_alcance), breaks = seq(0, max_alcance, by = 400), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0, max_curtidas), breaks = seq(0, max_curtidas, by = 20), expand = c(0, 0)) +
+  labs(title = "Alcance vs. Curtidas")
+
+table(dados_agrup$Cluster)
+
+# Visualizar a tabela com Dados e Rotulação dos Grupos
 View(dados_agrup)
