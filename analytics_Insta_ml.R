@@ -7,6 +7,7 @@ getwd()
 
 install.packages("lubridate")
 install.packages("lattice")
+install.packages("gridExtra")
 library(lattice)
 library(lubridate)
 library(Amelia)
@@ -26,7 +27,7 @@ dados$Data <- dmy_hm(dados$Data)
 missmap(dados, 
         main = "Instagram do Startup Experience (SE) - Mapa de Dados Missing", 
         col = c("yellow", "black"), 
-        legend = FALSE)boxplot(dados$Curtidas, main = "boxplot das curtidas por postagem", ylab = "curtidas")
+        legend = FALSE)
 
 #plot de análise temporal
 
@@ -76,8 +77,8 @@ dados_cluster <- dados[,c(3,5)]
 View(dados_cluster)
 
 cluster <- kmeans(dados_cluster, centers = 2, iter.max = 100, nstart = 1,
-                      algorithm = c("Hartigan-Wong", "Lloyd", "Forgy",
-                                    "MacQueen"), trace=FALSE)
+                  algorithm = c("Hartigan-Wong", "Lloyd", "Forgy",
+                                "MacQueen"), trace=FALSE)
 
 # Adicionar a coluna de clusters ao conjunto de dados original
 dados$Cluster <- cluster$cluster
@@ -85,21 +86,21 @@ dados$Cluster <- cluster$cluster
 # Criar uma tabela de contagem de observações em cada cluster
 tabela_clusters <- table(dados$Cluster)
 V_C <- data.frame(dados$Cluster)
+View(V_C)
 print(tabela_clusters)
 
-dados_cluster$Alcance_ajustado <- (dados_cluster$Alcance + 2000)
-dados_cluster$Curtidas_ajustadas <- (dados_cluster$Curtidas + 200)
 
+plot <- clusplot(dados_cluster, cluster$cluster, color = TRUE, shade = TRUE, labels = 0, lines = 0,
+                 main = "Gráfico de Agrupamentos",
+                 xlab = "Alcance",
+                 ylab = "Curtidas")
 
-# Plot dos agrupamentos
-clusplot(dados_cluster, cluster$cluster, color = TRUE, shade = TRUE, labels = 0, lines = 0,
-         main = "Gráfico de Agrupamentos",
-         xlab = "Alcance",
-         ylab = "Curtidas")
+dados_agrup <- cbind(dados,V_C)
 
+View(dados_agrup)
 
-axis(side = 1, at = seq(0, 2000, by = 500))
-axis(side = 2, at = seq(0, 200, by = 50))
+dados_agrup[, "dados.Cluster"] <- ifelse(dados_agrup[, "dados.Cluster"] == 1, "padrão", 
+                                         ifelse(dados_agrup[, "dados.Cluster"] == 2, "hype",
+                                                as.character(dados_agrup[, "dados.Cluster"])))
 
-
-
+View(dados_agrup)
