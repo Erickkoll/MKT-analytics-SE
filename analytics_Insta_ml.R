@@ -8,12 +8,16 @@ getwd()
 install.packages("lubridate")
 install.packages("lattice")
 install.packages("gridExtra")
+install.packages("corrplot")
+install.packages("ggcorrplot")
+library(ggcorrplot)
 library(lattice)
 library(lubridate)
 library(Amelia)
 library(ggplot2)
 library(cluster)
 library(ggplot2)
+library(corrplot)
 
 #carregando dados
 
@@ -63,12 +67,17 @@ cors <- cor(dados[, cols], method = "pearson")
 head(cors)
 
 # Mapa de Correlação
-plot.cors(cors, "pearson")
+corrplot(cors, method = "color", mar=c(2,2,2,5), 
+         addCoef.col = "black", 
+         addCoefasPercent = FALSE, 
+         tl.col = "black")
 
 
 max_iterations <- 500
 iteration <- 1
 condition_met <- FALSE
+
+dados_cluster <- dados[,c(3,5)]
 
 while(iteration <= max_iterations && !condition_met) {
   
